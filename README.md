@@ -2,9 +2,9 @@ This repository contains an adjusted version of fast-rcnn for our [hospital-peop
 
 Please consult the original repo's [README](https://github.com/rbgirshick/fast-rcnn/blob/master/README.md) for information on using fast r-cnn in general. Here, we describe how to get our version running for the hospital-people-detector.
 
-## Installation
+# Installation
 
-# 1. Get Caffe
+## 1. Get Caffe
 
 1.1 Install the necessary requirements for `Caffe` and `pycaffe` (see: [Caffe installation instructions](http://caffe.berkeleyvision.org/installation.html))
 
@@ -50,7 +50,7 @@ Compile caffe and pycaffe
   ```
 Consult the [caffe installation instructions](http://caffe.berkeleyvision.org/installation.html#compilation) for more information about compiling caffe.
   
-# 2. Get Fast R-CNN
+## 2. Get Fast R-CNN
 
 2.1 clone our Fast R-CNN repository
 
@@ -65,7 +65,7 @@ Consult the [caffe installation instructions](http://caffe.berkeleyvision.org/in
    make
    ```
     
-# 3. Make sure the modules can be found
+## 3. Make sure the modules can be found
 
 Add caffe and fast-rcnn-mobility-aids to your paths:
 
