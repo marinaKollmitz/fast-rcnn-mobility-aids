@@ -82,3 +82,13 @@ Add the following lines (replace ```<path-to-caffe>``` and ```<path-to-fast-rcnn
   #Fast R-CNN
   export PYTHONPATH=<path-to-fast-rcnn-mobility-aids>/lib:$PYTHONPATH
   ```
+
+Confirm both modules are found:
+
+  ```Shell
+  python
+  >>> import caffe
+  >>> import fast_rcnn
+  ```
+  
+Both lines should return without error. 
