@@ -8,6 +8,7 @@
 #include<pcl/segmentation/sac_segmentation.h>
 #include<pcl/segmentation/extract_clusters.h>
 #include<pcl/visualization/cloud_viewer.h>
+#include<dirent.h>
 
 //#include<pcl/ModelCoefficients.h>
 //#include<pcl/PointIndices.h>
@@ -410,18 +411,46 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
 int main (int argc, char** argv)
 {
     ProposalGenerator prop_gen;
-    std::string image_path = "/home/kollmitz/datasets/mobility-aids/Depth/seq_1477488601.9106879780.png";
-    cv::Mat depth_image = cv::imread(image_path, CV_16UC1);
 
-    cv::Mat depthjet_image;
-    depth2jet(depth_image, depthjet_image);
+    std::string dataset_path = "/home/kollmitz/datasets/mobility-aids/";
+    std::string depth_dir = dataset_path + "Depth/";
+    std::string roidb_dir = dataset_path + "roidb_segmentation/";
 
-    std::vector<Bbox> proposals = prop_gen.get_proposals(depth_image);
-
-    std::cout << "found " << proposals.size() << " proposals" << std::endl;
-    for(int i=0; i<proposals.size(); i++)
+    //find files in depth_dir
+    std::vector<std::string> v;
+    DIR* dirp = opendir(depth_dir.c_str());
+    struct dirent * dp;
+    while ((dp = readdir(dirp)) != NULL)
     {
-        Bbox proposal = proposals.at(i);
-        std::cout << proposal.xmin << " " << proposal.ymin << " " << proposal.xmax << " " << proposal.ymax << std::endl;
+        if(std::string(dp->d_name).find(".png") != std::string::npos)
+        {
+            v.push_back(dp->d_name);
+        }
     }
+    closedir(dirp);
+
+    std::cout << "found " << v.size() << " Depth images. Generating roidb segmentation files..." << std::endl;
+
+    for(int i=0; i<v.size(); i++)
+    {
+        std::string image_name = v.at(i);
+        std::string image_path = depth_dir + image_name;
+        cv::Mat depth_image = cv::imread(image_path, CV_16UC1);
+
+        std::vector<Bbox> proposals = prop_gen.get_proposals(depth_image);
+
+        std::cout << v.at(i) << ": found " << proposals.size() << " proposals" << std::endl;
+
+        ofstream myfile;
+        myfile.open((roidb_dir + image_name.substr(0, image_name.size()-4) + ".txt").c_str());
+
+        for(int i=0; i<proposals.size(); i++)
+        {
+            Bbox proposal = proposals.at(i);
+            myfile << proposal.xmin << " " << proposal.ymin << " " << proposal.xmax << " " << proposal.ymax << std::endl;
+        }
+        myfile.close();
+    }
+
+    std::cout << "done" << std::endl;
 }
