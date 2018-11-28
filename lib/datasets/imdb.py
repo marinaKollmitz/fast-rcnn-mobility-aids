@@ -150,7 +150,7 @@ class imdb(object):
 
         return ar, gt_overlaps, recalls, thresholds
 
-    def create_roidb_from_box_list(self, box_list, gt_roidb):
+    def create_roidb_from_box_list(self, box_list, gt_roidb, depth_list=None):
         assert len(box_list) == self.num_images, \
                 'Number of boxes must match number of ground-truth images'
         roidb = []
@@ -158,7 +158,11 @@ class imdb(object):
             boxes = box_list[i]
             num_boxes = boxes.shape[0]
             overlaps = np.zeros((num_boxes, self.num_classes), dtype=np.float32)
-
+            
+            depths = -1 * np.ones((num_boxes, 1))
+            if depth_list is not None:
+                depths = depth_list[i]
+            
             if gt_roidb is not None:
                 gt_boxes = gt_roidb[i]['boxes']
                 gt_classes = gt_roidb[i]['gt_classes']
@@ -168,9 +172,11 @@ class imdb(object):
                 maxes = gt_overlaps.max(axis=1)
                 I = np.where(maxes > 0)[0]
                 overlaps[I, gt_classes[argmaxes[I]]] = maxes[I]
-
+                
             overlaps = scipy.sparse.csr_matrix(overlaps)
+            
             roidb.append({'boxes' : boxes,
+                          'depths' : depths,
                           'gt_classes' : np.zeros((num_boxes,),
                                                   dtype=np.int32),
                           'gt_overlaps' : overlaps,

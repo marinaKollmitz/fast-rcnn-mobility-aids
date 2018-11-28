@@ -10,6 +10,7 @@
 __sets = {}
 
 import datasets.pascal_voc
+from datasets.mobility_aids import mobility_aids
 import numpy as np
 
 def _selective_search_IJCV_top_k(split, year, top_k):
@@ -36,6 +37,32 @@ for top_k in np.arange(1000, 11000, 1000):
             name = 'voc_{}_{}_top_{:d}'.format(year, split, top_k)
             __sets[name] = (lambda split=split, year=year, top_k=top_k:
                     _selective_search_IJCV_top_k(split, year, top_k))
+
+###set up mobilityaids datasets
+
+#train RGB
+name = 'mobilityaids_train_RGB'
+dataset_path = '/home/kollmitz/datasets/mobility-aids/'
+imageSet = 'train_RGB'
+roidb_txtfiles_path = '/home/kollmitz/datasets/mobility-aids-additional/roidb_sliding/'
+imageset_file = dataset_path + 'ImageSets/TrainSet_RGB.txt'
+image_folder = dataset_path + 'Images/'
+annotations_folder = dataset_path + 'Annotations_RGB/'
+
+mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder)
+
+__sets[name] = (lambda : mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder))
+
+#train RGB
+name = 'mobilityaids_test_RGB_segmentation'
+dataset_path = '/home/kollmitz/datasets/mobility-aids/'
+imageSet = 'test_RGB_segmentation'
+roidb_txtfiles_path = '/media/kollmitz/5408984708982A4E/Andres/multiclass_people/roidb_segmentation/'
+imageset_file = dataset_path + 'ImageSets/TestSet1.txt'
+image_folder = dataset_path + 'Images/'
+annotations_folder = dataset_path + 'Annotations_RGB/'
+
+__sets[name] = (lambda : mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder))
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

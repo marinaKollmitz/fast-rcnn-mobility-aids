@@ -213,7 +213,8 @@ def vis_detections(im, class_name, dets, thresh=0.3):
     im = im[:, :, (2, 1, 0)]
     for i in xrange(np.minimum(10, dets.shape[0])):
         bbox = dets[i, :4]
-        score = dets[i, -1]
+        score = dets[i, 4]
+        depth = dets[i, -1]
         if score > thresh:
             plt.cla()
             plt.imshow(im)
@@ -223,7 +224,7 @@ def vis_detections(im, class_name, dets, thresh=0.3):
                               bbox[3] - bbox[1], fill=False,
                               edgecolor='g', linewidth=3)
                 )
-            plt.title('{}  {:.3f}'.format(class_name, score))
+            plt.title('{}  {:.3f} depth: {:.3f}'.format(class_name, score, depth))
             plt.show()
 
 def apply_nms(all_boxes, thresh):
@@ -237,9 +238,13 @@ def apply_nms(all_boxes, thresh):
     for cls_ind in xrange(num_classes):
         for im_ind in xrange(num_images):
             dets = all_boxes[cls_ind][im_ind]
+            
             if dets == []:
                 continue
-            keep = nms(dets, thresh)
+            
+            dets_test = dets#dets[:,0:5]
+            keep = nms(dets_test, thresh)
+            
             if len(keep) == 0:
                 continue
             nms_boxes[cls_ind][im_ind] = dets[keep, :].copy()
@@ -248,6 +253,7 @@ def apply_nms(all_boxes, thresh):
 def test_net(net, imdb):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
+    # num_images = 10
     # heuristic: keep an average of 40 detections per class per images prior
     # to NMS
     max_per_set = 40 * num_images
@@ -261,7 +267,7 @@ def test_net(net, imdb):
     top_scores = [[] for _ in xrange(imdb.num_classes)]
     # all detections are collected into:
     #    all_boxes[cls][image] = N x 5 array of detections in
-    #    (x1, y1, x2, y2, score)
+    #    (x1, y1, x2, y2, depth, score)
     all_boxes = [[[] for _ in xrange(num_images)]
                  for _ in xrange(imdb.num_classes)]
 
@@ -277,6 +283,7 @@ def test_net(net, imdb):
         im = cv2.imread(imdb.image_path_at(i))
         _t['im_detect'].tic()
         scores, boxes = im_detect(net, im, roidb[i]['boxes'])
+        depths = roidb[i]['depths']
         _t['im_detect'].toc()
 
         _t['misc'].tic()
@@ -285,9 +292,12 @@ def test_net(net, imdb):
                             (roidb[i]['gt_classes'] == 0))[0]
             cls_scores = scores[inds, j]
             cls_boxes = boxes[inds, j*4:(j+1)*4]
+            cls_depths = depths[inds]
+            
             top_inds = np.argsort(-cls_scores)[:max_per_image]
             cls_scores = cls_scores[top_inds]
             cls_boxes = cls_boxes[top_inds, :]
+            cls_depths = cls_depths[top_inds]
             # push new scores onto the minheap
             for val in cls_scores:
                 heapq.heappush(top_scores[j], val)
@@ -299,9 +309,9 @@ def test_net(net, imdb):
                 thresh[j] = top_scores[j][0]
 
             all_boxes[j][i] = \
-                    np.hstack((cls_boxes, cls_scores[:, np.newaxis])) \
+                    np.hstack((cls_boxes, cls_scores[:, np.newaxis], cls_depths[:])) \
                     .astype(np.float32, copy=False)
-
+            
             if 0:
                 keep = nms(all_boxes[j][i], 0.3)
                 vis_detections(im, imdb.classes[j], all_boxes[j][i][keep, :])
