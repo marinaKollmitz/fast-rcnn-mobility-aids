@@ -31,6 +31,8 @@ struct Bbox
     int ymin;
     int xmax;
     int ymax;
+
+    double depth;
 };
 
 struct PlaneCoordinates
@@ -326,16 +328,25 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
     std::vector<Bbox> proposals;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = this->get_cloud(depth_image, 4);
-//    viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud_in", port1);
-//    viewer.createViewPortCamera(port1);
+//    pcl::visualization::CloudViewer viewer ("generated cloud");
+//    viewer.showCloud (cloud);
 //    std::cout << "showing input cloud " << std::endl;
 
+//    while (!viewer.wasStopped ()){}
+
     cloud = this->apply_voxel_filter(cloud, 0.1);
-
     PlaneCoordinates ground_plane = this->estimate_ground_plane(cloud);
-    cloud = this->remove_ground_plane(cloud, ground_plane);
 
-    //while (!viewer.wasStopped ()){}
+    if(!ground_plane.valid)
+    {
+        //take standard ground plane coefficients
+        ground_plane.a = 0.0848112;
+        ground_plane.b = -0.993395;
+        ground_plane.c = -0.0772927;
+        ground_plane.d = 1.10195;
+    }
+
+    cloud = this->remove_ground_plane(cloud, ground_plane);
 
     std::vector<pcl::PointIndices> clusters = this->cluster_pointcloud(cloud);
 
@@ -389,6 +400,9 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
                     bbox.xmax = std::max(0, std::min(bbox.xmax, depth_image.cols));
                     bbox.ymin = std::max(0, std::min(bbox.ymin, depth_image.rows));
                     bbox.ymax = std::max(0, std::min(bbox.ymax, depth_image.rows));
+
+                    //get mean depth value
+                    bbox.depth = center_z;
 
                     proposals.push_back(bbox);
 
@@ -447,7 +461,7 @@ int main (int argc, char** argv)
         for(int i=0; i<proposals.size(); i++)
         {
             Bbox proposal = proposals.at(i);
-            myfile << proposal.xmin << " " << proposal.ymin << " " << proposal.xmax << " " << proposal.ymax << std::endl;
+            myfile << proposal.xmin << " " << proposal.ymin << " " << proposal.xmax << " " << proposal.ymax << " " << proposal.depth << std::endl;
         }
         myfile.close();
     }

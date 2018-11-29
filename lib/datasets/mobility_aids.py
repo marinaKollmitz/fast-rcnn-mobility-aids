@@ -13,6 +13,7 @@ import utils.cython_bbox
 import cPickle
 import yaml
 import pandas as pd
+import json
 
 class mobility_aids(datasets.imdb):
     def __init__(self, image_set, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder):
@@ -31,6 +32,9 @@ class mobility_aids(datasets.imdb):
         
         self._image_ext = ['.png']
         self._image_index = self._load_image_set_index()
+        
+        #detections with lower scores are not saved to json results file
+        self._test_score_threshold = 0.00
 
         # Default to roidb handler
         self._roidb_handler = self.txtfiles_roidb
@@ -230,17 +234,72 @@ class mobility_aids(datasets.imdb):
                     # the VOCdevkit expects 1-based indices
                     for k in xrange(dets.shape[0]):
                         if(k == 0):
-                            f.write('{:s} {:d} {:d} {:d} {:d} {:.6f};'.
+                            f.write('{:s} {:d} {:d} {:d} {:d} {:.6f} {:.6f};'.
                                 format(index, int(dets[k, 0]) + 1, int(dets[k, 1]) + 1,
-                                        int(dets[k, 2]) + 1, int(dets[k, 3]) + 1, float(dets[k, 4])))
+                                        int(dets[k, 2]) + 1, int(dets[k, 3]) + 1, float(dets[k, 4]),
+                                        float(dets[k, 5])))
                         else:
-                            f.write(' {:d} {:d} {:d} {:d} {:.6f};'.
+                            f.write(' {:d} {:d} {:d} {:d} {:.6f} {:.6f};'.
                                 format( int(dets[k, 0]) + 1, int(dets[k, 1]) + 1,
-                                        int(dets[k, 2]) + 1, int(dets[k, 3]) + 1, float(dets[k, 4]))) 
+                                        int(dets[k, 2]) + 1, int(dets[k, 3]) + 1, float(dets[k, 4]),
+                                        float(dets[k, 5]))) 
                     f.write('\n')        
+
+    def _write_json_results(self, all_boxes, output_dir):
+        # [{"image_id": 42,
+        #   "category_id": 18,
+        #   "bbox": [258.15,41.29,348.26,243.78],
+        #   "score": 0.236}, ...]
+        
+        res_file = output_dir + '/bbox_' + self._image_set + '_results.json'
+        
+        #class ids for evaluation
+        class_ids = {}
+        class_ids['pedestrian'] = 1
+        class_ids['crutches'] = 2
+        class_ids['walking_frame'] = 3
+        class_ids['wheelchair'] = 4
+        class_ids['push_wheelchair'] = 5
+        
+        results = []
+        for cls_ind, cls in enumerate(self.classes):
+            if cls == '__background__':
+                continue
+            
+            for im_ind, index in enumerate(self.image_index):
+                dets = all_boxes[cls_ind][im_ind]
+                if dets == []:
+                    continue
+                for k in xrange(dets.shape[0]):
+                    
+                    dets = dets.astype(np.float)
+                    
+                    score = dets[k, 4]
+                    
+                    if score > self._test_score_threshold:
+                        bbox = dets[k, 0:4]
+                        depth = dets[k, 5]
+                        cat_id = class_ids[cls]
+                        
+                        #convert bbox to xywh
+                        x1, y1 = bbox[0], bbox[1]
+                        w = bbox[2] - x1 + 1
+                        h = bbox[3] - y1 + 1
+                        
+                        results.extend(
+                                [{'image_id': im_ind,
+                                  'category_id': cat_id,
+                                  'bbox': [x1, y1, w, h],
+                                  'depth': depth,
+                                  'score': score}])
+                    
+        print('Writing bbox results json to: {}'.format(os.path.abspath(res_file)))
+        with open(res_file, 'w') as fid:
+            json.dump(results, fid)
 
     def evaluate_detections(self, all_boxes, output_dir):
         self._write_results_file(all_boxes, output_dir)
+        self._write_json_results(all_boxes, output_dir)
 
     def competition_mode(self, on):
         if on:

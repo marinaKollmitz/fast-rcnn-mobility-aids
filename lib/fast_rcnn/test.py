@@ -242,18 +242,17 @@ def apply_nms(all_boxes, thresh):
             if dets == []:
                 continue
             
-            dets_test = dets#dets[:,0:5]
-            keep = nms(dets_test, thresh)
+            keep = nms(dets, thresh)
             
             if len(keep) == 0:
                 continue
             nms_boxes[cls_ind][im_ind] = dets[keep, :].copy()
+            
     return nms_boxes
 
 def test_net(net, imdb):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
-    # num_images = 10
     # heuristic: keep an average of 40 detections per class per images prior
     # to NMS
     max_per_set = 40 * num_images
@@ -323,7 +322,7 @@ def test_net(net, imdb):
 
     for j in xrange(1, imdb.num_classes):
         for i in xrange(num_images):
-            inds = np.where(all_boxes[j][i][:, -1] > thresh[j])[0]
+            inds = np.where(all_boxes[j][i][:, 4] > thresh[j])[0]
             all_boxes[j][i] = all_boxes[j][i][inds, :]
 
     det_file = os.path.join(output_dir, 'detections.pkl')
