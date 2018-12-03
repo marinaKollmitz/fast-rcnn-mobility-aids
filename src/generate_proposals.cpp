@@ -64,6 +64,8 @@ public:
     ProposalGenerator();
     ProposalGenerator(CameraCalibration cam_calibration, double camera_height);
     std::vector<Bbox> get_proposals(cv::Mat depth_image);
+    void setPlaneCoordinates(PlaneCoordinates plane_coordinates);
+    void setPixelOffset(int offset_x, int offset_y);
 private:
     void init(CameraCalibration cam_calibration, double camera_height);
     pcl::PointCloud<pcl::PointXYZ>::Ptr get_cloud(cv::Mat depth_image, int sample_factor);
@@ -84,6 +86,11 @@ private:
 
     CameraCalibration cam_calib_;
     double camera_height_;
+
+    bool gp_from_cloud_;
+    PlaneCoordinates ground_plane_;
+    double pixel_offset_x_;
+    double pixel_offset_y_;
 };
 
 ProposalGenerator::ProposalGenerator()
@@ -107,6 +114,24 @@ void ProposalGenerator::init(CameraCalibration cam_calibration, double camera_he
 {
     cam_calib_ = cam_calibration;
     camera_height_ = camera_height;
+    gp_from_cloud_ = true;
+    pixel_offset_x_ = 0;
+    pixel_offset_y_ = 0;
+}
+
+//if this method is called, the proposal generator will not estimate the
+//plane coordinates for each point cloud, but will use the plane_coordinates
+//until new ones are set
+void ProposalGenerator::setPlaneCoordinates(PlaneCoordinates plane_coordinates)
+{
+    gp_from_cloud_ = false;
+    ground_plane_ = plane_coordinates;
+}
+
+void ProposalGenerator::setPixelOffset(int offset_x, int offset_y)
+{
+    pixel_offset_x_ = offset_x;
+    pixel_offset_y_ = offset_y;
 }
 
 //TODO input images must have depth values in meters
@@ -217,7 +242,7 @@ PlaneCoordinates ProposalGenerator::estimate_ground_plane(
 pcl::PointCloud<pcl::PointXYZ>::Ptr ProposalGenerator::remove_ground_plane(
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, PlaneCoordinates ground_plane)
 {
-    double floor_limit = 0.3;
+    double floor_limit = 0.2;
     double ceiling_limit = 2.0;
 
     // Get index of points close to ground plane
@@ -254,7 +279,7 @@ std::vector<pcl::PointIndices> ProposalGenerator::cluster_pointcloud(
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
     ec.setClusterTolerance (0.12); //0.12 points separated less than 12cm are part of same cluster
     ec.setMinClusterSize (15);
-    ec.setMaxClusterSize (1300);
+    ec.setMaxClusterSize (1000);
     ec.setSearchMethod (tree);
     ec.setInputCloud (cloud_in);
     ec.extract (cluster_indices);
@@ -335,23 +360,22 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
 //    while (!viewer.wasStopped ()){}
 
     cloud = this->apply_voxel_filter(cloud, 0.1);
-    PlaneCoordinates ground_plane = this->estimate_ground_plane(cloud);
 
-    if(!ground_plane.valid)
+    if(gp_from_cloud_)
+        ground_plane_ = this->estimate_ground_plane(cloud);
+
+    if(!ground_plane_.valid)
     {
-        //take standard ground plane coefficients
-        ground_plane.a = 0.0848112;
-        ground_plane.b = -0.993395;
-        ground_plane.c = -0.0772927;
-        ground_plane.d = 1.10195;
+        std::cerr << "Proposal Generator: estimated ground plane not valid" << std::endl;
+        return proposals;
     }
 
-    cloud = this->remove_ground_plane(cloud, ground_plane);
+    cloud = this->remove_ground_plane(cloud, ground_plane_);
 
     std::vector<pcl::PointIndices> clusters = this->cluster_pointcloud(cloud);
 
     std::vector<BboxTemplate> bbox_templates = get_templates();
-    double stride = 0.1; //slide windows 10cm to each side
+    double stride = 12; //slide windows 12 pixels to each side
 
     //find center of each cluster and apply local sliding templates
     for(std::vector<pcl::PointIndices>::iterator cluster_it = clusters.begin();
@@ -378,7 +402,8 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
 //            }
 
             //bbox y coordinates are determined by the plane and the template height
-            double plane_y = -(ground_plane.a*center_x + ground_plane.c*center_z +ground_plane.d)/ground_plane.b;
+            double plane_y =
+                    -(ground_plane_.a*center_x + ground_plane_.c*center_z +ground_plane_.d)/ground_plane_.b;
 
             for(std::vector<BboxTemplate>::iterator template_it = bbox_templates.begin();
                 template_it != bbox_templates.end(); template_it++)
@@ -386,14 +411,22 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
                 BboxTemplate bbox_template = *template_it;
 
                 bbox.ymax = plane_y * cam_calib_.fy/(center_z) + cam_calib_.cy;
+                bbox.ymax = bbox.ymax + pixel_offset_y_;
                 bbox.ymin = (plane_y - bbox_template.height) * cam_calib_.fy/center_z + cam_calib_.cy;
 
                 //slide templates to left and right by the stride
                 for(int kk=-1; kk<=1; kk++)
                 {
-                    double eval_x = center_x + kk * stride;
+                    double eval_x = center_x;
                     bbox.xmin = (eval_x - bbox_template.width/2.0) * cam_calib_.fx/center_z + cam_calib_.cx;
                     bbox.xmax = (eval_x + bbox_template.width/2.0) * cam_calib_.fx/center_z + cam_calib_.cx;
+
+                    //local sliding template
+                    bbox.xmin = bbox.xmin + kk*stride;
+                    bbox.xmax = bbox.xmax + kk*stride;
+
+                    bbox.xmin = bbox.xmin + pixel_offset_x_;
+                    bbox.xmax = bbox.xmax + pixel_offset_x_;
 
                     //clip to image boundaries
                     bbox.xmin = std::max(0, std::min(bbox.xmin, depth_image.cols));
@@ -403,6 +436,12 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
 
                     //get mean depth value
                     bbox.depth = center_z;
+
+                    if((bbox.xmax - bbox.xmin)*(bbox.ymax - bbox.ymin) < 0.0001)
+                    {
+                        std::cout << "small bbox size encountered" << std::endl;
+                        exit(-1);
+                    }
 
                     proposals.push_back(bbox);
 
@@ -425,6 +464,17 @@ std::vector<Bbox> ProposalGenerator::get_proposals(cv::Mat depth_image)
 int main (int argc, char** argv)
 {
     ProposalGenerator prop_gen;
+
+    //set plane coordinates
+    PlaneCoordinates ground_plane;
+    ground_plane.a = 0;
+    ground_plane.b = -1;
+    ground_plane.c = -0.1;
+    ground_plane.d = 1.000;
+    ground_plane.valid = true;
+
+    prop_gen.setPlaneCoordinates(ground_plane);
+    prop_gen.setPixelOffset(17, 25);
 
     std::string dataset_path = "/home/kollmitz/datasets/mobility-aids/";
     std::string depth_dir = dataset_path + "Depth/";
