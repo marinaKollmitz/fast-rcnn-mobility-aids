@@ -12,6 +12,7 @@ __sets = {}
 import datasets.pascal_voc
 from datasets.mobility_aids import mobility_aids
 import numpy as np
+import os
 
 def _selective_search_IJCV_top_k(split, year, top_k):
     """Return an imdb that uses the top k proposals from the selective search
@@ -42,9 +43,9 @@ for top_k in np.arange(1000, 11000, 1000):
 
 #train RGB
 name = 'mobilityaids_train_RGB'
-dataset_path = '/home/kollmitz/datasets/mobility-aids/'
-imageSet = 'train_RGB'
-roidb_txtfiles_path = '/home/kollmitz/datasets/mobility-aids-additional/roidb_sliding/'
+dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/data/mobility-aids/'
+imageSet = name
+roidb_txtfiles_path = dataset_path + 'roidb_sliding/'
 imageset_file = dataset_path + 'ImageSets/TrainSet_RGB.txt'
 image_folder = dataset_path + 'Images/'
 annotations_folder = dataset_path + 'Annotations_RGB/'
@@ -53,14 +54,36 @@ mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annota
 
 __sets[name] = (lambda : mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder))
 
-#train RGB
+#train DepthJet
+name = 'mobilityaids_train_DJ'
+dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/data/mobility-aids/'
+imageSet = name
+roidb_txtfiles_path = dataset_path + 'roidb_sliding/'
+imageset_file = dataset_path + 'ImageSets/TrainSet_DepthJet.txt'
+image_folder = dataset_path + 'DepthJet/'
+annotations_folder = dataset_path + 'Annotations_DepthJet/'
+
+mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder)
+
+__sets[name] = (lambda : mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder))
+
+#test RGB segmentation
 name = 'mobilityaids_test_RGB_segmentation'
-dataset_path = '/home/kollmitz/datasets/mobility-aids/'
-imageSet = 'test_RGB_segmentation'
-roidb_txtfiles_path = '/media/kollmitz/5408984708982A4E/Andres/multiclass_people/roidb_segmentation/'
+dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/data/mobility-aids/'
+imageSet = name
+roidb_txtfiles_path = dataset_path + 'roidb_segmentation/'
 imageset_file = dataset_path + 'ImageSets/TestSet1.txt'
 image_folder = dataset_path + 'Images/'
 annotations_folder = dataset_path + 'Annotations_RGB/'
+
+#test DepthJet segmentation
+name = 'mobilityaids_test_DJ_segmentation'
+dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/data/mobility-aids/'
+imageSet = name
+roidb_txtfiles_path = dataset_path + 'roidb_segmentation/'
+imageset_file = dataset_path + 'ImageSets/TestSet1.txt'
+image_folder = dataset_path + 'DepthJet/'
+annotations_folder = dataset_path + 'Annotations_DepthJet/'
 
 __sets[name] = (lambda : mobility_aids(imageSet, roidb_txtfiles_path, imageset_file, image_folder, annotations_folder))
 

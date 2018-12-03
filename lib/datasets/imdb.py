@@ -159,9 +159,10 @@ class imdb(object):
             num_boxes = boxes.shape[0]
             overlaps = np.zeros((num_boxes, self.num_classes), dtype=np.float32)
             
-            depths = -1 * np.ones((num_boxes, 1))
+            depths = -1 * np.ones((num_boxes,))
             if depth_list is not None:
-                depths = depth_list[i]
+                depths = np.array(depth_list[i])
+                depths = np.expand_dims(depths, axis=1)
             
             if gt_roidb is not None:
                 gt_boxes = gt_roidb[i]['boxes']
